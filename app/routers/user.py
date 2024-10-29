@@ -2,11 +2,10 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from app.backend.db_depends import get_db
 from typing import Annotated
-from app.models import User
+from app.models import User, Task
 from app.schemas import CreateUser, UpdateUser
 from sqlalchemy import insert, select, update, delete
 from slugify import slugify
-
 
 router = APIRouter(prefix='/user', tags=['user'])
 
@@ -27,6 +26,17 @@ async def user_by_id(user_id: int, db: Annotated[Session, Depends(get_db)]):
         )
     return user
 
+
+@router.get('/user_id/tasks')
+async def tasks_by_user_id(user_id: int, db: Annotated[Session, Depends(get_db)]):
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found'
+        )
+    all_tasks = db.scalars(select(Task).where(Task.user_id == user_id)).all()
+    return all_tasks
 
 
 @router.post('/create')
@@ -71,18 +81,18 @@ async def update_user(update_user: UpdateUser, user_id: int, db: Annotated[Sessi
     }
 
 
-
 @router.delete('/delete')
-async def delete_user(db: Annotated[Session, Depends(get_db)], user_id: int):
+async def delete_user(user_id: int, db: Annotated[Session, Depends(get_db)]):
     user = db.scalar(select(User).where(User.id == user_id))
-    if user is None:
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User was not found'
+            detail='User not found'
         )
-    db.execute(delete(User).where(User.id == user_id).values(is_active=False))
+    db.execute(delete(User).where(User.id == user_id))
+    db.execute(delete(Task).where(Task.user_id == user_id))
     db.commit()
     return {
-        'status_code': status.HTTP_201_CREATED,
-        'transaction': 'User delete is Successful'
+        'status_code': status.HTTP_200_OK,
+        'transaction': 'User delete successful!'
     }
